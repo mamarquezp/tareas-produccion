@@ -17,12 +17,10 @@ export async function cacheAside<T>(
   ttlSeg: number,
   calcular: () => Promise<T>,
 ): Promise<{ valor: T; desdeCache: boolean }> {
-  // TODO (ronda 4):
-  //   const guardado = await redis.get(clave);
-  //   if (guardado) return { valor: JSON.parse(guardado), desdeCache: true };
-  //   const valor = await calcular();
-  //   await redis.set(clave, JSON.stringify(valor), 'EX', ttlSeg);
-  //   return { valor, desdeCache: false };
+  const guardado = await redis.get(clave);
+  if (guardado) return { valor: JSON.parse(guardado) as T, desdeCache: true };
 
-  return { valor: await calcular(), desdeCache: false }; // ← sin caché todavía
+  const valor = await calcular();
+  await redis.set(clave, JSON.stringify(valor), 'EX', ttlSeg);
+  return { valor, desdeCache: false };
 }

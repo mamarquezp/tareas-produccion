@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { cacheAside } from '@/lib/cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,33 +17,32 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const t0 = Date.now();
 
-  const equipos = await sql<{ slug: string; nombre: string }[]>`
-    SELECT slug, nombre FROM equipos ORDER BY slug
-  `;
-
-  const tablero = [];
-  for (const eq of equipos) {
-    // +1 consulta por equipo. Aquí está el problema.
-    const filas = await sql<{ total: string; hechas: string }[]>`
-      SELECT count(*)::text AS total,
-             count(*) FILTER (WHERE hecha)::text AS hechas
-        FROM tareas
-       WHERE equipo = ${eq.slug}
+  // (a) Una sola consulta con LEFT JOIN + GROUP BY reemplaza las 151 del N+1.
+  // (b) cacheAside con TTL corto: la segunda visita viene de caché, no de la base.
+  const { valor: tablero, desdeCache } = await cacheAside('tablero', 10, async () => {
+    const filas = await sql<
+      { slug: string; nombre: string; total: string; hechas: string }[]
+    >`
+      SELECT e.slug, e.nombre,
+             count(t.id)::text AS total,
+             count(t.id) FILTER (WHERE t.hecha)::text AS hechas
+        FROM equipos e
+        LEFT JOIN tareas t ON t.equipo = e.slug
+       GROUP BY e.slug, e.nombre
+       ORDER BY e.slug
     `;
-    // Un poquito de trabajo por fila, para que el N+1 se note en la medición.
-    await sql`SELECT pg_sleep(0.03)`;
-    tablero.push({
-      equipo: eq.slug,
-      nombre: eq.nombre,
-      total: Number(filas[0].total),
-      hechas: Number(filas[0].hechas),
-    });
-  }
+    return filas.map((f) => ({
+      equipo: f.slug,
+      nombre: f.nombre,
+      total: Number(f.total),
+      hechas: Number(f.hechas),
+    }));
+  });
 
   return NextResponse.json({
     tablero,
     generadoEn: new Date().toISOString(),
     msDeServidor: Date.now() - t0,
-    desdeCache: false,
+    desdeCache,
   });
 }

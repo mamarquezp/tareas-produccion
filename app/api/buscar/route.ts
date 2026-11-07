@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { sqlPeligroso } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { equipoActual } from '@/lib/sesion';
 
 export const dynamic = 'force-dynamic';
@@ -20,20 +20,18 @@ export async function GET(req: Request) {
   const q = new URL(req.url).searchParams.get('q') ?? '';
   const equipo = await equipoActual();
 
-  const consulta = `
-    SELECT id, titulo, hecha
-      FROM tareas
-     WHERE equipo = '${equipo}'
-       AND titulo ILIKE '%${q}%'
-     ORDER BY id
-  `;
-
   try {
-    const filas = await sqlPeligroso(consulta);
-    return NextResponse.json({ resultados: filas, consulta });
+    const filas = await sql`
+      SELECT id, titulo, hecha
+        FROM tareas
+       WHERE equipo = ${equipo}
+         AND titulo ILIKE ${'%' + q + '%'}
+       ORDER BY id
+    `;
+    return NextResponse.json({ resultados: filas });
   } catch (e) {
-    // Devolver el error de la base al cliente es regalo adicional para el
-    // atacante: le dice la forma de la consulta sin tener que adivinarla.
-    return NextResponse.json({ error: String(e), consulta }, { status: 500 });
+    // No devolvemos ni el error crudo ni la consulta al cliente
+    console.error('fallo en /api/buscar:', e);
+    return NextResponse.json({ error: 'no se pudo buscar' }, { status: 500 });
   }
 }

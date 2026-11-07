@@ -24,5 +24,5 @@ export async function dentroDelLimite(
 
   const n = await redis.incr(clave);
   if (n === 1) await redis.expire(clave, ventanaSeg);
-  return n <= limite;
+  return n <= limite; //antes siempre regresaba true, ahora si valida
 }

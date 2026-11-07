@@ -31,7 +31,7 @@ export async function POST() {
   // por equipo. La 6.ª dentro de la ventana recibe 429.
   if (!(await dentroDelLimite(equipo, 5, 60))) {
     return NextResponse.json(
-      { error: 'demasiadas peticiones, intenta más tarde' },
+      { error: 'límite de peticiones alcanzado, intenta más tarde' },
       { status: 429 },
     );
   }
